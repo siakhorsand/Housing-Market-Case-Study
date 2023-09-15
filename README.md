@@ -1,7 +1,5 @@
-## COGS 137 Final Project
+## R Data Analysis Project 
 
-This repo is for your final project report for COGS 137, which will be submitted as a group.
+In this case study, we aim to use R to examine the various elements that influence home prices in Boston. Our goal is to identify and comprehend the trends that dictate housing costs in the area, enabling us to make future price predictions based on the factors we investigate. While understanding housing prices often requires specialized knowledge in real estate and is influenced by broader economic conditions, we contend that our analysis can offer valuable insights into the general factors that impact housing prices and how they are interrelated. This information can serve as a complementary resource to specialized real estate expertise, applicable not just to Boston but also to suburban regions along the East Coast.
 
-Given the different options for the final project, no specific template file is provided for this project, but feel free to use previous templates to get you started.
-
-Reminder that you will also *individually* submit a form about how working with your group mates was (link found on Canvas home page). 
+The findings from our data analysis will be beneficial for those involved in the real estate sector, as well as for individuals looking to make well-informed decisions about property transactions in Boston.
