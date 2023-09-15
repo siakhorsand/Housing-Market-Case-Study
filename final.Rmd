@@ -1,0 +1,304 @@
+---
+title: "final_proj"
+Authors: "Sia Khorsand, Chaska Kentish, Charles Ye"
+Date: "March 22, 2023"
+output: html_document
+
+
+---
+
+
+# Introduction
+
+This is a case study in which we seek to analyze the factors which affect housing prices in Boston. We seek to find and understand a pattern by which housing prices in Boston move in order to be able to estimate housing prices, in the future, and based on the variables we will analyze. Although housing prices can be widely technical in the world of real estate and dependent on the housing market and the economic state of the country, we believe that analysis of this data can also help us gain some insight about the more general variables affecting housing prices and their interconnectedness. This knowledge can be a supplement to more technical industry real estate knowledge, not just about Boston, but generally any suburban area on the East Coast. 
+
+The results of this data analysis will be valuable for anyone affiliated with real estate organizations and/or anyone interested in gaiing some general knowledge to make more informed decisions regarding buying and selling property in Boston. 
+
+
+# Background Information
+
+The Boston dataset in the MASS package in R contains information about 506 neighborhoods in the Boston suburban area. Each of these neighborhoods have fourteen variables such as crime rate, rooms, proportion of non-retail business acres, location in relation to the Charles River, highway accesibility, employment center proximity, and more. This data set was gathered and released in 1978 and it has since been proved to have high value for real estate,economics, and the housing market through its applications of statistical research, modeling, linear regression models, and machine learning/data science. 
+
+
+Questions
+
+1) How do crime rates relate to housing prices in Boston?
+2) Describe the overall characteristics of the houses ranging from cheap to expensive.
+3) Is multicollinearity present in coefficient estimates from linear regression models when analyzing housing prices? 
+
+---
+
+Let us get started: 
+
+
+```{r load the packages}
+library(MASS)
+library(dplyr)
+library(tidyverse)
+library(tidymodels)
+library(skimr)
+library(survey)
+library(srvyr)
+library(ggcorrplot)
+library(GGally) 
+library(car)
+```
+
+
+
+```{r - load data}
+data(Boston)
+```
+
+
+#DATA WRANGLING
+```{r}
+
+# changes the 0/1 values to no/yes in the chas variable and renames chas 
+boston <- Boston |>
+ mutate(chas = str_replace_all(chas, c("0" = "No",
+                                           "1" = "Yes"))) 
+boston <- boston |>
+mutate(RivBound = chas) |>
+  select(-chas)
+
+# Converts the values to proportions instead of percentages
+boston <- boston|>
+  mutate(lowstat = (lstat/100), 
+         old = (age/100),
+         nonres = (indus/100),
+         residlot = (zn/100)) |>
+  select(-lstat,-age, -indus, -zn, -ptratio)
+
+#deleted ptratio because pupil to teacher ratio is not a relevant variable in our study. 
+
+```
+
+
+# Data Exploration
+
+let's look at our wrangled data 
+```{r}
+glimpse(boston)
+```
+
+now, let's see the mean,median,std etc  for each variable
+
+```{r}
+summary(boston)
+```
+
+Save the data we just wrangled
+
+```{r}
+save(boston, file="data/wrangled/wrangled_data_boston.rda")
+```
+
+load the wrangled data to use for the rest of the project
+
+```{r}
+load("data/wrangled/wrangled_data_boston.rda")
+```
+
+Let's check our data
+```{r}
+skim(boston)
+```
+
+# Exploratory Data Analysis
+
+let's create some visualizations and plots to understand the relationship between our variables better
+
+```{r}
+#compare crime rates with median property values while taking status into account
+boston |>
+  group_by(medv, crim) 
+  ggplot(boston, aes(x = medv, y = crim, color = lowstat)) +
+  geom_line() +
+    labs(title = "Crime rates vs. Median Value of Homes",
+         x= "Median Value",
+         y = "Crime",
+         color= "Status")
+```
+
+### Question 1:
+
+Based on the graph, we observe that crime demonstrates a negative relationship with median housing values. This means that as prices go up, crime rates go down. Additionally, the colorization of the graph shows that crime is more present among lower status parts of the population, which makes sense considering higher status population reside in more expensive housing. 
+
+
+Now, let's see the value of houses based on how old they are and how many rooms they have 
+
+```{r}
+#compare crime rates with median property values while taking status into account
+boston |>
+  group_by(medv, rm) 
+  ggplot(boston, aes(x = medv, y = rm, color = old)) +
+  geom_line( size = .8) +
+    labs(title = "Average Number of Rooms vs. Median Value of Homes",
+         x= "Value(in $1000s)",
+         y = "Room",
+         color= "Proportion Old")
+```
+
+Best on the line graph, more rooms means the value of the property is higher. However, the proportion of older houses does not appear to have any pattern or relationship with room number of house value other than that cheaper houses tend to be in newer areas and have less rooms on average. 
+
+
+
+Let's see how proximity to the river/being riverbound affects prices: 
+
+```{r}
+boston |>
+  group_by(medv, RivBound) 
+  ggplot(boston, aes(y = medv, x = RivBound, )) +
+  geom_boxplot( color = "red", size = .8) +
+    labs(title = "Are homes closer to the river more expensive?",
+         y= "Value(in $1000s)",
+         x = "Riverbound")
+```
+
+This box-plot shows us that being riverbound tends to bring the price of the houses up. However, there are a lot of outliers that are not not in proximity of the river, and are extremely expensive, even in comparison to the riverbound houses. 
+
+
+
+
+
+
+# ANALYSIS
+
+Lets take a closer look at how exactly crime rates affect median housing prices in Boston. We'll do this by building a linear regression model with crime rate as the only predictor.
+
+```{r}
+finalModel <- lm(medv ~ crim, data = boston)
+finalModel |> tidy()
+finalModel |> glance()
+```
+
+While we saw a negative correlation between crime rate and median housing price earlier, we can now determine that crime rate alone is not a good predictor of median housing prices in Boston as it only accounts for about 14.9% of the variance of median housing prices.
+
+Lets take a look at how each variable affects median housing prices by building a linear regression model.
+
+```{r}
+allV <- lm(medv ~ ., data = boston)
+allV |> tidy()
+allV |> glance()
+ 
+```
+
+As we can see from the model summary, the age of the house and proportion of non retail businesses in the town are not significant given their t values(statistic). 
+
+
+Lets create a new model without old and nonres.
+```{r}
+finalModel <- lm(medv ~ . -old -nonres, data = boston)
+finalModel |> tidy()
+finalModel |> glance()
+```
+
+From the model, through a backwards selection method, we see that all variables except for old and nonres are significant. 
+
+Let's now visualize our fitted model:
+
+```{r}
+
+predicted <- predict(finalModel)
+observed <- boston$medv
+bos <- data.frame(predicted, observed)
+
+#creates a scatter plot of fitted vs. data values
+ggplot(bos, aes(x = predicted, y = observed)) +
+  geom_point() +
+  geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "blue") +
+  labs(x = "Predicting Values from the Model", y = " Median Value", 
+       title = "Linear Model Predictions vs. Observations")
+```
+
+In our revised model, we can see that our selected factors can account for 70.7% of the variance in median housing prices in Boston.
+
+
+Final Model: 
+median housing prices = 14.2 - (0.102 * crimerate per capita) - (9.61 * nitrogen concentration) + (4.28 * num rooms) - (1.56 * distance to employment centers) + (0.227 * accessibility of highways) - (0.016 * property tax amount) + (0.009 * proportion of african americans) + (3.21 * next to river) - (55.3 * proportion of population that is lower status) + (7.98 * proportion of land zoned for lots) in thousands of USD.
+
+
+### Question 2: 
+Based on our model, we can predict that a cheap house would be in an area with a high crime rate, high nitrogen concentratrion, low number of rooms, high distance to employment centers, low accessibility to highways, higher property tax, lower proportion of african americans, not next to a river, in a population with a lot of lower status residents, and having less residential land area zoned for large building lots.
+
+Likewise, we can predict that an expensive house would be in an area with a low crime rate, low nitrogen concentration, high number of rooms, close to employment centers, easy access to highways, lower property tax, higher proportion of african americans, next to a river, in a population with less lower status residents, and having more residential land area zoned out for large lots.
+
+
+
+Now, let's see if we can diagnose any multicollinearity:
+
+```{r}
+  boston |>
+  select(medv,
+         crim,
+         nox,
+         tax,
+         old, 
+         rad,
+         rm) |>
+  ggpairs(columns = c(3:5),
+          lower = list(continuous = wrap("smooth_loess",
+                                         color = "red",
+                                         alpha = 0.5,
+                                         size = 0.16)))
+
+
+```
+
+Variance Inflation Factor is an index that measures how much the variance of a regression coefficient is increased due to collinearity.
+
+Let's now calculate the VIF numbers to see the multicollinearity levels of variables: 
+
+```{r}
+# Calculates the VIF values for each variable
+vif_values <- vif(allV)
+
+# View  vif values
+print(vif_values)
+```
+
+### Question 3: 
+As shown in the VIF analysis, most variables have relatively low VIF numbers except for tax per $1000 and distance from the highway, which have VIF numbers larger than 5.
+
+Additionally, nonres and old and nox , and dis all have similar VIF numbers of around ~4. 
+
+Therefore, we can assume that tax and rad are the two variables that which are affected by multicollinearity. 
+
+
+Let's explore this using a heatmap:
+
+```{r}
+cor_boston <- cor(boston |> select(-RivBound))
+
+ggcorrplot(cor_boston,
+  tl.cex = 6,
+  hc.order = TRUE,
+  colors = c(
+    "red",
+    "white",
+    "red"
+  ),
+  outline.color = "transparent",
+  title = "Correlation Matrix: Housing in Boston",
+  legend.title = expression(rho)
+)
+```
+
+
+According to these plots, we see a strong correlation between tax, rad, rm, and nox respectively. 
+
+
+# RESULTS
+
+Through our exploratory data analysis, we observed a decreasing trend in median housing value with higher levels of crime and an increasing trend in median housing prices with an increase in the average number of rooms. We also observed a minor trend in newer homes having an increase in the number of rooms on average. Furthermore, we observed that the median housing value and interquartile range of homes not riverbound were much lower than homes that were riverbound across most homes.
+
+To further explore the effect of crime rate on housing value, we created a linear model to determine if it was significantly correlated with a high amount of explanation for variance. We discovered that crime rate was a statistically significant predictor (p-value=1.17e-19 <<< alpha=0.05), however it is not a good independent predictor of median housing prices in Boston, as it accounts for only 14.9% of variance in the median housing price values. The expected effect of crime rate alone on median housing values was a decrease of -0.415 per percent of crime per capita rate, or a decrease of ~$415 per percent of crime rate.
+
+We then decided to create a more encapsulating model to predict median housing values based on the other variables presented in our dataset. From our analysis we found that all the variables were significantly correlated with housing price except “old” (homes built before/after 1940) and “nonres” (proportion of non-retail business acres), with p-values of 0.622 and 0.558 (both greater than our alpha significance level of 0.05). Thus, our final model was built off of the remaining eleven variables, where we discovered that more expensive houses tended to be in areas with lower crime rates, lower nitrogen oxide concentration, richer neighborhoods, higher number of rooms on average, a lower property tax, and closer proximity to employment centers, highways, and rivers.
+
+To validate our model, we tested for multicollinearity. In addition to the visual levels of correlation through our pair-plot and heatmap, we numerically determined levels of multicollinearity through the calculation of VIF values for each variable. We found that most of our variables on average were moderately correlated, with tax and distance from highways having high levels of correlation with VIF values of 8.957 and 7.217 respectively. Thus, in contrast to our other variables, we generally expect these two variables to have lower reliability in predicting median housing value.   
+
+# CONCLUSION
+When considering our entire dataset, we cannot mathematically state that the findings of our analysis are consistent over time or that our linear models have the same levels of coefficient weight in the modern day. However, there is a similar trend between the findings of our visualizations and mathematical testing and current-day expectations for housing value. We can see that higher levels of crime rates in a particular area are trending with a significantly lower median value of a home in comparison to areas with lower crime rates. In contrast, an increase in the number of rooms on average trending upwards with increased home value with a weaker trend of more recent homes having higher value alongside an increase in rooms. Our model found that most of our variables (crime rate, nitrogen oxide levels, average number of rooms, distance from Boston employment centers, access to radial highways, property tax-rate, proportion of black populations, river-bound or not, percent of lower-status population, and proportion of residential land over 25,000 sq.ft) have a statistically significant association with the median value of a home (p-values below alpha of 0.05), with 71.2% of pricing variance being explained. This further indicates the limitation of our dataset at fully predicting average housing prices as there are other variables that were not considered in the original study (such as proximity to school) that may be strongly correlated with increasing or decreasing housing prices. Furthermore, while older homes may be expected to be less expensive, there was no statistically significant correlation between homes built prior to 1940 and a change in housing price. In conclusion, there is a strong association between environmental and socioeconomic factors in neighborhoods and the expected median value of a home.  
+
